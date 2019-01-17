@@ -29,8 +29,8 @@ import android.os.RemoteException;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.telephony.PhoneNumberUtils;
-import android.util.AtomicFile;
 import android.telephony.Rlog;
+import android.util.AtomicFile;
 import android.util.Xml;
 
 import com.android.internal.util.FastXmlSerializer;
@@ -48,11 +48,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -86,7 +86,7 @@ public class SmsUsageMonitor {
     static final int CATEGORY_STANDARD_SHORT_CODE = 2;
 
     /** Return value from {@link #checkDestination} for possible premium short codes. */
-    static final int CATEGORY_POSSIBLE_PREMIUM_SHORT_CODE = 3;
+    public static final int CATEGORY_POSSIBLE_PREMIUM_SHORT_CODE = 3;
 
     /** Return value from {@link #checkDestination} for premium short codes. */
     static final int CATEGORY_PREMIUM_SHORT_CODE = 4;
@@ -109,8 +109,8 @@ public class SmsUsageMonitor {
     /** Premium SMS permission when the owner has allowed the app to send premium SMS. */
     public static final int PREMIUM_SMS_PERMISSION_ALWAYS_ALLOW = 3;
 
-    private final AtomicInteger mCheckPeriod = new AtomicInteger(0);
-    private final AtomicInteger mMaxAllowed = new AtomicInteger(0);
+    private final AtomicInteger mCheckPeriod = new AtomicInteger(0);;
+    private final AtomicInteger mMaxAllowed = new AtomicInteger(0);;
 
     private final HashMap<String, ArrayList<Long>> mSmsStamp =
             new HashMap<String, ArrayList<Long>>();
@@ -252,11 +252,11 @@ public class SmsUsageMonitor {
     }
 
     private static class SettingsObserverHandler extends Handler {
-        SettingsObserverHandler(Context context, AtomicBoolean enabled, AtomicInteger limit,
-                AtomicInteger period) {
+        SettingsObserverHandler(Context context, AtomicBoolean enabled,
+                AtomicInteger limit, AtomicInteger period) {
             ContentResolver resolver = context.getContentResolver();
-            ContentObserver globalObserver = new SettingsObserver(this, context, enabled, limit,
-                    period);
+            ContentObserver globalObserver = new SettingsObserver(this, context, enabled,
+                    limit, period);
             resolver.registerContentObserver(Settings.Global.getUriFor(
                     Settings.Global.SMS_SHORT_CODE_CONFIRMATION), false, globalObserver);
             resolver.registerContentObserver(Settings.Global.getUriFor(
@@ -272,10 +272,8 @@ public class SmsUsageMonitor {
      */
     public SmsUsageMonitor(Context context) {
         mContext = context;
-
         mSettingsObserverHandler = new SettingsObserverHandler(mContext, mCheckEnabled,
                 mMaxAllowed, mCheckPeriod);
-
         loadPremiumSmsPolicyDb();
     }
 

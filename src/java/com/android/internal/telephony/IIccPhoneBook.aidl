@@ -184,77 +184,38 @@ interface IIccPhoneBook {
     int[] getAdnRecordsSizeForSubscriber(int subId, int efid);
 
     /**
-     * Get the adn count of sim card
+     * Get the capacity of ADN records
      *
-     * @return the adn count of sim card
+     * @return  int[10] array
+     *            capacity[0]  is the max count of ADN
+     *            capacity[1]  is the used count of ADN
+     *            capacity[2]  is the max count of EMAIL
+     *            capacity[3]  is the used count of EMAIL
+     *            capacity[4]  is the max count of ANR
+     *            capacity[5]  is the used count of ANR
+     *            capacity[6]  is the max length of name
+     *            capacity[7]  is the max length of number
+     *            capacity[8]  is the max length of email
+     *            capacity[9]  is the max length of anr
      */
-    int getAdnCount();
+    int[] getAdnRecordsCapacity();
 
     /**
-     * Get the adn count of sim card
+     * Get the capacity of ADN records
      *
      * @param subId user preferred subId
-     * @return the adn count of sim card
+     * @return  int[10] array
+     *            capacity[0]  is the max count of ADN
+     *            capacity[1]  is the used count of ADN
+     *            capacity[2]  is the max count of EMAIL
+     *            capacity[3]  is the used count of EMAIL
+     *            capacity[4]  is the max count of ANR
+     *            capacity[5]  is the used count of ANR
+     *            capacity[6]  is the max length of name
+     *            capacity[7]  is the max length of number
+     *            capacity[8]  is the max length of email
+     *            capacity[9]  is the max length of anr
      */
-    int getAdnCountUsingSubId(int subId);
+    int[] getAdnRecordsCapacityForSubscriber(int subId);
 
-    /**
-     * Get the anr count of sim card
-     *
-     * @return the anr count of sim card
-     */
-    int getAnrCount();
-
-    /**
-     * Get the anr count of sim card
-     *
-     * @param subId user preferred subId
-     * @return the anr count of sim card
-     */
-    int getAnrCountUsingSubId(int subId);
-
-    /**
-     * Get the email count of sim card
-     *
-     * @return the email count of sim card
-     */
-    int getEmailCount();
-
-    /**
-     * Get the email count of sim card
-     *
-     * @param subId user preferred subId
-     * @return the email count of sim card
-     */
-    int getEmailCountUsingSubId(int subId);
-
-    /**
-     * Get the spare anr count of sim card
-     *
-     * @return the spare anr count of sim card
-     */
-    int getSpareAnrCount();
-
-    /**
-     * Get the spare anr count of sim card
-     *
-     * @param subId user preferred subId
-     * @return the spare anr count of sim card
-     */
-    int getSpareAnrCountUsingSubId(int subId);
-
-    /**
-     * Get the spare email count of sim card
-     *
-     * @return the spare email count of sim card
-     */
-    int getSpareEmailCount();
-
-    /**
-     * Get the spare email count of sim card
-     *
-     * @param subId user preferred subId
-     * @return the spare email count of sim card
-     */
-    int getSpareEmailCountUsingSubId(int subId);
 }

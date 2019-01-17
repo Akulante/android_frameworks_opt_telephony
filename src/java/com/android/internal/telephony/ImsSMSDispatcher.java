@@ -24,20 +24,19 @@ import android.os.AsyncResult;
 import android.os.Message;
 import android.provider.Telephony.Sms.Intents;
 import android.telephony.Rlog;
-import android.telephony.TelephonyManager;
+
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.telephony.cdma.CdmaInboundSmsHandler;
-import com.android.internal.R;
 import com.android.internal.telephony.cdma.CdmaSMSDispatcher;
 import com.android.internal.telephony.gsm.GsmInboundSmsHandler;
 import com.android.internal.telephony.gsm.GsmSMSDispatcher;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class ImsSMSDispatcher extends SMSDispatcher {
+public class ImsSMSDispatcher extends SMSDispatcher {
     private static final String TAG = "RIL_ImsSms";
 
     private SMSDispatcher mCdmaDispatcher;
@@ -51,14 +50,7 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
     private boolean mIms = false;
     private String mImsSmsFormat = SmsConstants.FORMAT_UNKNOWN;
 
-    /**
-     * true if MO SMS over IMS is enabled. Default value is true. false for
-     * carriers with config_send_sms1x_on_voice_call = true when attached to
-     * eHRPD and during active 1x voice call
-     */
-    private boolean mImsSmsEnabled = true;
-
-    public ImsSMSDispatcher(PhoneBase phone, SmsStorageMonitor storageMonitor,
+    public ImsSMSDispatcher(Phone phone, SmsStorageMonitor storageMonitor,
             SmsUsageMonitor usageMonitor) {
         super(phone, usageMonitor, null);
         Rlog.d(TAG, "ImsSMSDispatcher created");
@@ -71,9 +63,9 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
         mCdmaInboundSmsHandler = CdmaInboundSmsHandler.makeInboundSmsHandler(phone.getContext(),
                 storageMonitor, phone, (CdmaSMSDispatcher) mCdmaDispatcher);
         mGsmDispatcher = new GsmSMSDispatcher(phone, usageMonitor, this, mGsmInboundSmsHandler);
-        Thread broadcastThread = new Thread(new SmsBroadcastUndelivered(phone.getContext(),
-                mGsmInboundSmsHandler, mCdmaInboundSmsHandler));
-        broadcastThread.start();
+        SmsBroadcastUndelivered.initialize(phone.getContext(),
+            mGsmInboundSmsHandler, mCdmaInboundSmsHandler);
+        InboundSmsHandler.registerNewMessageNotificationActionHandler(phone.getContext());
 
         mCi.registerForOn(this, EVENT_RADIO_ON, null);
         mCi.registerForImsNetworkStateChanged(this, EVENT_IMS_STATE_CHANGED, null);
@@ -81,7 +73,7 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
 
     /* Updates the phone object when there is a change */
     @Override
-    protected void updatePhoneObject(PhoneBase phone) {
+    protected void updatePhoneObject(Phone phone) {
         Rlog.d(TAG, "In IMS updatePhoneObject ");
         super.updatePhoneObject(phone);
         mCdmaDispatcher.updatePhoneObject(phone);
@@ -166,7 +158,7 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
     }
 
     @Override
-    protected void sendData(String destAddr, String scAddr, int destPort,
+    public void sendData(String destAddr, String scAddr, int destPort,
             byte[] data, PendingIntent sentIntent, PendingIntent deliveryIntent) {
         if (isCdmaMo()) {
             mCdmaDispatcher.sendData(destAddr, scAddr, destPort,
@@ -178,18 +170,16 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
     }
 
     @Override
-    protected void sendMultipartText(String destAddr, String scAddr,
+    public void sendMultipartText(String destAddr, String scAddr,
             ArrayList<String> parts, ArrayList<PendingIntent> sentIntents,
             ArrayList<PendingIntent> deliveryIntents, Uri messageUri, String callingPkg,
-            boolean persistMessage, int priority, boolean isExpectMore, int validityPeriod) {
+            boolean persistMessage) {
         if (isCdmaMo()) {
             mCdmaDispatcher.sendMultipartText(destAddr, scAddr,
-                    parts, sentIntents, deliveryIntents, messageUri, callingPkg, persistMessage,
-                    priority, isExpectMore, validityPeriod);
+                    parts, sentIntents, deliveryIntents, messageUri, callingPkg, persistMessage);
         } else {
             mGsmDispatcher.sendMultipartText(destAddr, scAddr,
-                    parts, sentIntents, deliveryIntents, messageUri, callingPkg, persistMessage,
-                    priority, isExpectMore, validityPeriod);
+                    parts, sentIntents, deliveryIntents, messageUri, callingPkg, persistMessage);
         }
     }
 
@@ -207,23 +197,22 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
     }
 
     @Override
-    protected void sendText(String destAddr, String scAddr, String text, PendingIntent sentIntent,
+    public void sendText(String destAddr, String scAddr, String text, PendingIntent sentIntent,
             PendingIntent deliveryIntent, Uri messageUri, String callingPkg,
-            boolean persistMessage, int priority, boolean isExpectMore, int validityPeriod) {
+            boolean persistMessage) {
         Rlog.d(TAG, "sendText");
         if (isCdmaMo()) {
             mCdmaDispatcher.sendText(destAddr, scAddr,
-                    text, sentIntent, deliveryIntent, messageUri, callingPkg, persistMessage,
-                    priority, isExpectMore, validityPeriod);
+                    text, sentIntent, deliveryIntent, messageUri, callingPkg, persistMessage);
         } else {
             mGsmDispatcher.sendText(destAddr, scAddr,
-                    text, sentIntent, deliveryIntent, messageUri, callingPkg, persistMessage,
-                    priority, isExpectMore, validityPeriod);
+                    text, sentIntent, deliveryIntent, messageUri, callingPkg, persistMessage);
         }
     }
 
+    @VisibleForTesting
     @Override
-    protected void injectSmsPdu(byte[] pdu, String format, PendingIntent receivedIntent) {
+    public void injectSmsPdu(byte[] pdu, String format, PendingIntent receivedIntent) {
         Rlog.d(TAG, "ImsSMSDispatcher:injectSmsPdu");
         try {
             // TODO We need to decide whether we should allow injecting GSM(3gpp)
@@ -232,9 +221,14 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
                     android.telephony.SmsMessage.createFromPdu(pdu, format);
 
             // Only class 1 SMS are allowed to be injected.
-            if (msg.getMessageClass() != android.telephony.SmsMessage.MessageClass.CLASS_1) {
-                if (receivedIntent != null)
+            if (msg == null ||
+                    msg.getMessageClass() != android.telephony.SmsMessage.MessageClass.CLASS_1) {
+                if (msg == null) {
+                    Rlog.e(TAG, "injectSmsPdu: createFromPdu returned null");
+                }
+                if (receivedIntent != null) {
                     receivedIntent.send(Intents.RESULT_SMS_GENERIC_ERROR);
+                }
                 return;
             }
 
@@ -277,7 +271,6 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
         if (oldFormat.equals(newFormat)) {
             if (isCdmaFormat(newFormat)) {
                 Rlog.d(TAG, "old format matched new format (cdma)");
-                shouldSendSmsOverIms();
                 mCdmaDispatcher.sendSms(tracker);
                 return;
             } else {
@@ -288,7 +281,7 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
         }
 
         // format didn't match, need to re-encode.
-        HashMap map = tracker.mData;
+        HashMap map = tracker.getData();
 
         // to re-encode, fields needed are:  scAddr, destAddr, and
         //   text if originally sent as sendText or
@@ -314,7 +307,6 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
                 Rlog.d(TAG, "old format (gsm) ==> new format (cdma)");
                 pdu = com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(
                         scAddr, destAddr, text, (tracker.mDeliveryIntent != null), null);
-                shouldSendSmsOverIms();
             } else {
                 Rlog.d(TAG, "old format (cdma) ==> new format (gsm)");
                 pdu = com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(
@@ -330,7 +322,6 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
                 pdu = com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(
                             scAddr, destAddr, destPort.intValue(), data,
                             (tracker.mDeliveryIntent != null));
-                shouldSendSmsOverIms();
             } else {
                 Rlog.d(TAG, "old format (cdma) ==> new format (gsm)");
                 pdu = com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(
@@ -372,9 +363,9 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
     @Override
     protected SmsTracker getNewSubmitPduTracker(String destinationAddress, String scAddress,
             String message, SmsHeader smsHeader, int format, PendingIntent sentIntent,
-            PendingIntent deliveryIntent, boolean lastPart, int priority, boolean isExpectMore,
-            int validityPeriod, AtomicInteger unsentPartCount, AtomicBoolean anyPartFailed,
-            Uri messageUri, String fullMessageText) {
+            PendingIntent deliveryIntent, boolean lastPart,
+            AtomicInteger unsentPartCount, AtomicBoolean anyPartFailed, Uri messageUri,
+            String fullMessageText) {
         Rlog.e(TAG, "Error! Not implemented for IMS.");
         return null;
     }
@@ -397,9 +388,8 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
      * @return true if Cdma format should be used for MO SMS, false otherwise.
      */
     private boolean isCdmaMo() {
-        if (!isIms() || !shouldSendSmsOverIms()) {
-            // Either IMS is not registered or there is an active 1x voice call
-            // while on eHRPD, use Voice technology to determine SMS format.
+        if (!isIms()) {
+            // IMS is not registered, use Voice technology to determine SMS format.
             return (PhoneConstants.PHONE_TYPE_CDMA == mPhone.getPhoneType());
         }
         // IMS is registered with SMS support
@@ -414,53 +404,5 @@ public final class ImsSMSDispatcher extends SMSDispatcher {
      */
     private boolean isCdmaFormat(String format) {
         return (mCdmaDispatcher.getFormat().equals(format));
-    }
-
-    /**
-     * Enables MO SMS over IMS
-     *
-     * @param enable
-     */
-    public void enableSendSmsOverIms(boolean enable) {
-        mImsSmsEnabled = enable;
-    }
-
-    /**
-     * Determines whether MO SMS over IMS is currently enabled.
-     *
-     * @return true if MO SMS over IMS is enabled, false otherwise.
-     */
-    public boolean isImsSmsEnabled() {
-        return mImsSmsEnabled;
-    }
-
-    /**
-     * Determines whether SMS should be sent over IMS if UE is attached to eHRPD
-     * and there is an active voice call
-     *
-     * @return true if SMS should be sent over IMS based on value in config.xml
-     *         or system property false otherwise
-     */
-    public boolean shouldSendSmsOverIms() {
-        boolean sendSmsOn1x = mContext.getResources().getBoolean(
-                com.android.internal.R.bool.config_send_sms1x_on_voice_call);
-        PhoneConstants.State currentCallState = mPhone.getState();
-        int currentVoiceNetwork = mPhone.getServiceState().getVoiceNetworkType();
-        int currentDataNetwork = mPhone.getServiceState().getDataNetworkType();
-
-        Rlog.d(TAG, "data = " + currentDataNetwork + " voice = " + currentVoiceNetwork
-                + " call state = " + currentCallState);
-
-        if (sendSmsOn1x) {
-            // The UE shall use 1xRTT for SMS if the UE is attached to an eHRPD
-            // network and there is an active 1xRTT voice call.
-            if (currentDataNetwork == TelephonyManager.NETWORK_TYPE_EHRPD
-                    && currentVoiceNetwork == TelephonyManager.NETWORK_TYPE_1xRTT
-                    && currentCallState != PhoneConstants.State.IDLE) {
-                enableSendSmsOverIms(false);
-                return false;
-            }
-        }
-        return true;
     }
 }
